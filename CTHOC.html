@@ -1,0 +1,1615 @@
+﻿<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HSK 1–6 Vocab Studio v3 — Học Từ Vựng, Kiểm Tra Đặt Câu & Phát Âm</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; }
+    .hanzi { font-family: 'Noto Sans SC', sans-serif; }
+    .perspective { perspective: 1000px; }
+    .preserve-3d { transform-style: preserve-3d; transition: transform 0.55s cubic-bezier(0.4, 0.2, 0.2, 1); }
+    .rotate-y-180 { transform: rotateY(180deg); }
+    .backface-hidden { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+    @keyframes pulseRing {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.7); }
+      70% { transform: scale(1); box-shadow: 0 0 0 14px rgba(225, 29, 72, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(225, 29, 72, 0); }
+    }
+    .recording-pulse { animation: pulseRing 1.5s infinite; }
+  </style>
+</head>
+<body class="text-slate-800 min-h-screen flex flex-col">
+
+  <!-- Top Navbar -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center font-bold text-xl hanzi shadow-sm">汉</div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-slate-900 text-lg leading-tight">HSK 1–6 Vocab Studio</h1>
+            <span class="px-2 py-0.5 rounded-md bg-rose-100 text-rose-700 text-[10px] font-bold uppercase">v3 Pro</span>
+          </div>
+          <p class="text-xs text-slate-500" id="syncStatusText">HSK1 sẵn sàng (319 từ) • Học từ, Đặt câu, Trắc nghiệm & Luyện phát âm</p>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="flex flex-wrap items-center gap-2">
+        <select id="uploadTargetLevel" title="Chọn cấp độ mặc định nếu file upload không có cột Cấp độ" class="px-2.5 py-2 rounded-lg border border-slate-300 text-xs font-semibold bg-slate-50">
+          <option value="AUTO">Cấp độ: Tự nhận / HSK2</option>
+          <option value="HSK1">Nạp vào: HSK1</option>
+          <option value="HSK2">Nạp vào: HSK2</option>
+          <option value="HSK3">Nạp vào: HSK3</option>
+          <option value="HSK4">Nạp vào: HSK4</option>
+          <option value="HSK5">Nạp vào: HSK5</option>
+          <option value="HSK6">Nạp vào: HSK6</option>
+        </select>
+
+        <label class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold cursor-pointer flex items-center gap-1.5 shadow-sm transition">
+          <span>📥</span> Up file HSK 2–6 (.xlsx/.csv/.json)
+          <input type="file" id="hskUploadInput" accept=".xlsx,.xls,.csv,.json" class="hidden" onchange="handleUploadHskFile(event)" />
+        </label>
+
+        <button onclick="connectWatchFile()" id="btnWatchFile" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+          <span>🔄</span> <span id="watchBtnLabel">Liên kết file</span>
+        </button>
+
+        <button onclick="autoGenerateExamplesForAll()" title="Tự động bổ sung câu ví dụ cho mọi từ đang thiếu ví dụ" class="px-3 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+          <span>⚡</span> Tự thêm ví dụ
+        </button>
+
+        <button onclick="openAddModal()" class="px-3 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm transition">
+          <span>➕</span> Thêm từ
+        </button>
+
+        <button onclick="exportToExcel()" class="px-3 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition">
+          <span>⬇️</span> Xuất Excel
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="max-w-6xl mx-auto px-4 flex gap-1 border-t border-slate-100 overflow-x-auto">
+      <button onclick="switchTab('flashcard')" id="tab-flashcard" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-rose-600 text-rose-600 whitespace-nowrap">🗂️ Flashcards</button>
+      <button onclick="switchTab('quiz')" id="tab-quiz" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 whitespace-nowrap">🎯 Kiểm tra từ vựng</button>
+      <button onclick="switchTab('sentence')" id="tab-sentence" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 whitespace-nowrap">✍️ Kiểm tra đặt câu</button>
+      <button onclick="switchTab('pronounce')" id="tab-pronounce" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 whitespace-nowrap">🎙️ Kiểm tra phát âm</button>
+      <button onclick="switchTab('match')" id="tab-match" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 whitespace-nowrap">🧩 Ghép thẻ</button>
+      <button onclick="switchTab('list')" id="tab-list" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-500 hover:text-slate-800 whitespace-nowrap">📚 Kho từ (<span id="totalCountBadge">319</span>)</button>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-6">
+
+    <!-- HSK1 Completion Banner -->
+    <div id="hsk1MasterBanner" class="hidden mb-6 bg-gradient-to-r from-emerald-600 to-teal-600 text-white p-4 rounded-2xl shadow-md flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <p class="font-bold text-base">🎉 Chúc mừng! Bạn đã hoàn thành toàn bộ từ vựng HSK 1!</p>
+        <p class="text-xs text-emerald-100 mt-0.5">Hãy bấm <strong>"Up file HSK 2–6"</strong> ở thanh trên để nạp bộ từ vựng tiếp theo và tiếp tục học.</p>
+      </div>
+      <label class="px-4 py-2 rounded-xl bg-white text-emerald-700 font-bold text-xs cursor-pointer hover:bg-emerald-50 transition">
+        📥 Tải file từ vựng HSK 2–6 ngay
+        <input type="file" accept=".xlsx,.xls,.csv,.json" class="hidden" onchange="handleUploadHskFile(event)" />
+      </label>
+    </div>
+
+    <!-- Level & Status Filter Bar -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-6 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex flex-wrap items-center gap-2.5">
+        <select id="levelFilter" onchange="applyFilters()" class="px-3 py-2 rounded-xl border border-rose-200 bg-rose-50/60 text-rose-700 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-rose-500">
+          <option value="ALL">Cấp độ: Tất cả (HSK 1–6)</option>
+          <option value="HSK1" selected>HSK 1</option>
+          <option value="HSK2">HSK 2</option>
+          <option value="HSK3">HSK 3</option>
+          <option value="HSK4">HSK 4</option>
+          <option value="HSK5">HSK 5</option>
+          <option value="HSK6">HSK 6</option>
+        </select>
+
+        <select id="statusFilter" onchange="applyFilters()" class="px-3 py-2 rounded-xl border border-slate-200 text-sm font-medium bg-slate-50 focus:outline-none focus:ring-2 focus:ring-rose-500">
+          <option value="all">Trạng thái: Tất cả</option>
+          <option value="unlearned">Chưa thuộc</option>
+          <option value="learned">Đã thuộc</option>
+          <option value="no-example">Thiếu ví dụ</option>
+        </select>
+
+        <div class="relative">
+          <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Tìm chữ Hán, Pinyin, nghĩa..." class="pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-sm w-56 focus:outline-none focus:ring-2 focus:ring-rose-500" />
+          <span class="absolute left-3 top-2.5 text-slate-400 text-sm">🔍</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-4 text-sm">
+        <div class="flex items-center gap-2">
+          <span class="text-slate-500">Đã thuộc (cấp đang chọn):</span>
+          <span class="font-bold text-emerald-600" id="learnedProgressText">0 / 319</span>
+        </div>
+        <div class="w-28 h-2.5 bg-slate-100 rounded-full overflow-hidden">
+          <div id="learnedProgressBar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- TAB 1: FLASHCARDS                          -->
+    <!-- ========================================== -->
+    <section id="view-flashcard" class="view-section">
+      <div class="max-w-xl mx-auto">
+        <div class="flex justify-between items-center mb-3 text-sm text-slate-500">
+          <span id="fcCounter">Thẻ 1 / 319</span>
+          <div class="flex gap-2">
+            <button onclick="shuffleDeck()" class="px-3 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 font-medium text-slate-700">🔀 Xáo trộn</button>
+            <button onclick="autoAddExampleToCurrentCard()" class="px-3 py-1 rounded-lg bg-amber-50 border border-amber-200 hover:bg-amber-100 font-semibold text-amber-700">⚡ Tự thêm ví dụ</button>
+            <button onclick="editCurrentCard()" class="px-3 py-1 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 font-medium text-rose-600">✏️ Sửa</button>
+          </div>
+        </div>
+
+        <div class="perspective h-96 cursor-pointer select-none" onclick="flipCard()">
+          <div id="flashcardInner" class="preserve-3d relative w-full h-full">
+            <!-- Front -->
+            <div class="backface-hidden absolute inset-0 bg-white rounded-3xl border border-slate-200 shadow-lg p-8 flex flex-col items-center justify-center text-center">
+              <div class="flex items-center gap-2 mb-4">
+                <span id="fcLevelBadge" class="px-2.5 py-1 rounded-full bg-slate-900 text-white text-xs font-bold">HSK1</span>
+                <span id="fcPosBadge" class="px-3 py-1 rounded-full bg-rose-50 text-rose-600 text-xs font-semibold">Động từ</span>
+              </div>
+              <div id="fcHanzi" class="hanzi text-7xl font-bold text-slate-900 mb-4">爱</div>
+              <button onclick="event.stopPropagation(); speakText(currentFiltered[fcIndex]?.hanzi)" class="px-4 py-2 rounded-full bg-slate-100 hover:bg-rose-100 text-slate-700 hover:text-rose-700 text-sm font-medium flex items-center gap-2 transition">
+                🔊 Nghe phát âm
+              </button>
+              <p class="text-xs text-slate-400 mt-6">Nhấn vào thẻ để xem nghĩa & ví dụ (hoặc bấm Space)</p>
+            </div>
+
+            <!-- Back -->
+            <div class="backface-hidden rotate-y-180 absolute inset-0 bg-white rounded-3xl border-2 border-rose-200 shadow-lg p-6 flex flex-col justify-between overflow-y-auto">
+              <div>
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <div>
+                    <span id="fcBackHanzi" class="hanzi text-3xl font-bold text-slate-900 mr-2">爱</span>
+                    <span id="fcPinyin" class="text-lg font-semibold text-rose-600">ài</span>
+                  </div>
+                  <button onclick="event.stopPropagation(); speakText(currentFiltered[fcIndex]?.hanzi)" class="p-2 rounded-full bg-rose-50 text-rose-600 hover:bg-rose-100">🔊</button>
+                </div>
+
+                <div class="mt-3">
+                  <p class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Nghĩa tiếng Việt</p>
+                  <p id="fcMeaning" class="text-xl font-bold text-slate-800 mt-0.5">yêu, yêu thích</p>
+                </div>
+
+                <div class="mt-4">
+                  <div class="flex items-center justify-between">
+                    <p class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Câu ví dụ</p>
+                    <button onclick="event.stopPropagation(); autoAddExampleToCurrentCard()" class="text-xs text-amber-600 font-semibold hover:underline">⚡ Sinh thêm ví dụ</button>
+                  </div>
+                  <div id="fcExamplesContainer" class="mt-2 space-y-2 max-h-40 overflow-y-auto pr-1"></div>
+                </div>
+              </div>
+
+              <div class="pt-3 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400">
+                <span id="fcIdLabel">#1 • HSK1</span>
+                <span>Nhấn để lật lại</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 flex items-center justify-between gap-3">
+          <button onclick="prevCard()" class="px-5 py-3 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 font-semibold text-slate-700 shadow-sm">← Trước</button>
+          <button onclick="toggleLearnedCurrent()" id="btnMarkLearned" class="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm transition">
+            ✅ Đánh dấu đã thuộc
+          </button>
+          <button onclick="nextCard()" class="px-5 py-3 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50 font-semibold text-slate-700 shadow-sm">Tiếp →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: KIỂM TRA TỪ VỰNG (QUIZ)             -->
+    <!-- ========================================== -->
+    <section id="view-quiz" class="view-section hidden">
+      <div class="max-w-xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+        <div class="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-100">
+          <select id="quizMode" onchange="generateQuizQuestion()" class="px-3 py-1.5 rounded-xl border border-slate-200 text-sm font-semibold bg-slate-50">
+            <option value="hanzi-to-vi">Nhìn Chữ Hán → Chọn Nghĩa</option>
+            <option value="vi-to-hanzi">Nhìn Nghĩa → Chọn Chữ Hán</option>
+            <option value="pinyin-to-hanzi">Nhìn Pinyin → Chọn Chữ Hán</option>
+            <option value="audio-to-vi">Nghe Phát Âm → Chọn Nghĩa</option>
+            <option value="fill-blank">Điền từ vào câu ví dụ</option>
+            <option value="type-hanzi">Gõ Chữ Hán / Pinyin (Tự luận)</option>
+          </select>
+          <div class="flex items-center gap-3 text-sm font-semibold">
+            <span class="text-amber-600">🔥 Chuỗi: <span id="quizStreak">0</span></span>
+            <span class="text-emerald-600">Điểm: <span id="quizScore">0</span></span>
+          </div>
+        </div>
+
+        <div class="py-6 text-center">
+          <p class="text-xs uppercase tracking-wider text-slate-400 font-semibold mb-2" id="quizPromptHint">Chọn nghĩa đúng của từ sau:</p>
+          <div id="quizQuestionMain" class="hanzi text-6xl font-bold text-slate-900 my-4">爱</div>
+          <p id="quizQuestionSub" class="text-sm text-slate-500 mb-3"></p>
+          <button id="quizAudioBtn" onclick="speakText(quizCurrentWord?.hanzi)" class="px-4 py-1.5 rounded-full bg-rose-50 text-rose-600 text-sm font-semibold hover:bg-rose-100">🔊 Nghe phát âm</button>
+        </div>
+
+        <!-- Multiple choice container -->
+        <div id="quizOptions" class="grid grid-cols-1 gap-3"></div>
+
+        <!-- Typing input container (for type-hanzi mode) -->
+        <div id="quizTypeBox" class="hidden space-y-3">
+          <input type="text" id="quizTypeInput" onkeydown="if(event.key==='Enter') checkTypedQuizAnswer()" placeholder="Nhập Chữ Hán hoặc Pinyin không dấu (vd: ai)..." class="w-full px-4 py-3.5 rounded-2xl border-2 border-slate-200 focus:border-rose-500 focus:outline-none text-center text-lg hanzi" />
+          <button onclick="checkTypedQuizAnswer()" class="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-sm transition">Kiểm tra đáp án</button>
+        </div>
+
+        <div id="quizFeedback" class="mt-5 p-4 rounded-2xl hidden"></div>
+        <button id="quizNextBtn" onclick="generateQuizQuestion()" class="mt-5 w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold hidden">Câu tiếp theo →</button>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 3: KIỂM TRA ĐẶT CÂU (SENTENCE TEST)    -->
+    <!-- ========================================== -->
+    <section id="view-sentence" class="view-section hidden">
+      <div class="max-w-2xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-sm p-6">
+        <div class="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-100">
+          <div class="flex items-center gap-2">
+            <select id="sentenceMode" onchange="initSentenceTest()" class="px-3 py-1.5 rounded-xl border border-slate-200 text-sm font-semibold bg-slate-50">
+              <option value="scramble">🧩 Sắp xếp từ thành câu hoàn chỉnh</option>
+              <option value="compose">✍️ Tự đặt câu với từ vựng cho trước</option>
+            </select>
+          </div>
+          <div class="flex items-center gap-3 text-sm font-semibold">
+            <span class="text-indigo-600">Hoàn thành: <span id="sentenceDoneCount">0</span> câu</span>
+            <button onclick="initSentenceTest()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs">Đổi câu khác</button>
+          </div>
+        </div>
+
+        <!-- Target Word Card -->
+        <div class="mt-5 p-4 rounded-2xl bg-gradient-to-r from-rose-50 to-amber-50 border border-rose-100 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <span class="text-xs font-bold uppercase tracking-wider text-rose-600">Từ khóa mục tiêu</span>
+            <div class="flex items-baseline gap-2.5 mt-1">
+              <span id="sentTargetHanzi" class="hanzi text-3xl font-bold text-slate-900">爱</span>
+              <span id="sentTargetPinyin" class="text-base font-semibold text-rose-600">ài</span>
+              <span id="sentTargetPos" class="px-2 py-0.5 rounded bg-white text-slate-600 text-xs font-medium border border-slate-200">Động từ</span>
+            </div>
+            <p id="sentTargetMeaning" class="text-sm text-slate-700 font-medium mt-1">Nghĩa: yêu, yêu thích</p>
+          </div>
+          <button onclick="speakText(sentCurrentWord?.hanzi)" class="px-4 py-2 rounded-xl bg-white hover:bg-rose-100 text-rose-600 font-semibold text-sm shadow-sm border border-rose-200 transition">
+            🔊 Nghe từ
+          </button>
+        </div>
+
+        <!-- MODE A: SENTENCE SCRAMBLE -->
+        <div id="sentScrambleArea" class="mt-6">
+          <div class="mb-3">
+            <p class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Gợi ý nghĩa tiếng Việt:</p>
+            <p id="sentScrambleHintVi" class="text-base font-semibold text-slate-800 mt-1">Tôi yêu gia đình của tôi.</p>
+          </div>
+
+          <p class="text-xs font-semibold text-slate-500 mb-2">Câu bạn đang ghép (nhấn vào khối từ để bỏ chọn):</p>
+          <div id="sentAnswerSlot" class="min-h-[64px] p-3 rounded-2xl border-2 border-dashed border-rose-300 bg-rose-50/30 flex flex-wrap gap-2 items-center"></div>
+
+          <p class="text-xs font-semibold text-slate-500 mt-4 mb-2">Các mảnh ghép từ vựng (nhấn để chọn):</p>
+          <div id="sentTileBank" class="flex flex-wrap gap-2"></div>
+
+          <div class="mt-5 flex gap-3">
+            <button onclick="resetScrambleSlots()" class="px-4 py-3 rounded-2xl border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold text-sm">🔄 Xếp lại</button>
+            <button onclick="checkScrambleSentence()" class="flex-1 py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-sm shadow-sm transition">✅ Kiểm tra thứ tự câu</button>
+          </div>
+        </div>
+
+        <!-- MODE B: FREE SENTENCE COMPOSITION -->
+        <div id="sentComposeArea" class="mt-6 hidden">
+          <label class="block text-sm font-semibold text-slate-700 mb-2">
+            Hãy đặt một câu tiếng Trung có chứa từ <span id="sentComposeKeyword" class="hanzi text-rose-600 font-bold text-lg">爱</span>:
+          </label>
+          <textarea id="sentComposeInput" rows="3" placeholder="Ví dụ: 我很爱学习汉语。" class="w-full p-4 rounded-2xl border-2 border-slate-200 focus:border-rose-500 focus:outline-none hanzi text-xl"></textarea>
+
+          <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+            <button onclick="speakText(document.getElementById('sentComposeInput').value)" class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold">
+              🔊 Nghe máy đọc câu của bạn
+            </button>
+            <button onclick="toggleSampleSentences()" class="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold border border-amber-200">
+              💡 Xem câu mẫu tham khảo
+            </button>
+          </div>
+
+          <div id="sentSampleBox" class="hidden mt-3 p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2"></div>
+
+          <div class="mt-5 flex gap-3">
+            <button onclick="evaluateComposedSentence()" class="flex-1 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow-sm transition">
+              🔍 Chấm điểm & Lưu câu vào kho ví dụ
+            </button>
+          </div>
+        </div>
+
+        <div id="sentFeedback" class="mt-5 p-4 rounded-2xl hidden"></div>
+        <button id="sentNextBtn" onclick="initSentenceTest()" class="mt-4 w-full py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold hidden">Câu tiếp theo →</button>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 4: KIỂM TRA PHÁT ÂM (PRONUNCIATION)    -->
+    <!-- ========================================== -->
+    <section id="view-pronounce" class="view-section hidden">
+      <div class="max-w-xl mx-auto bg-white rounded-3xl border border-slate-200 shadow-sm p-6 text-center">
+        <div class="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-slate-100">
+          <select id="pronounceMode" onchange="initPronounceTest()" class="px-3 py-1.5 rounded-xl border border-slate-200 text-sm font-semibold bg-slate-50">
+            <option value="word">🗣️ Đọc từ vựng đơn lẻ</option>
+            <option value="sentence">📖 Đọc cả câu ví dụ</option>
+          </select>
+          <div class="flex items-center gap-3 text-sm font-semibold">
+            <span class="text-emerald-600">Điểm TB: <span id="pronounceAvgScore">--</span></span>
+            <button onclick="initPronounceTest()" class="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs">Từ tiếp theo →</button>
+          </div>
+        </div>
+
+        <div class="py-6">
+          <span id="pronLevelTag" class="px-2.5 py-1 rounded-full bg-slate-900 text-white text-xs font-bold">HSK1</span>
+          <div id="pronTargetText" class="hanzi text-5xl font-bold text-slate-900 mt-4 mb-2 leading-snug">爱</div>
+          <p id="pronTargetPinyin" class="text-lg font-semibold text-rose-600">ài</p>
+          <p id="pronTargetMeaning" class="text-sm text-slate-500 mt-1">yêu, yêu thích</p>
+
+          <div class="mt-5 flex items-center justify-center gap-3">
+            <button onclick="speakText(pronTargetHanzi, 0.85)" class="px-4 py-2 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center gap-1.5">
+              🔊 Nghe tốc độ chuẩn
+            </button>
+            <button onclick="speakText(pronTargetHanzi, 0.55)" class="px-4 py-2 rounded-full bg-amber-50 hover:bg-amber-100 text-amber-700 text-xs font-semibold flex items-center gap-1.5 border border-amber-200">
+              🐢 Nghe đọc chậm
+            </button>
+          </div>
+        </div>
+
+        <!-- Microphone Button -->
+        <div class="my-4 flex flex-col items-center">
+          <button id="btnRecordMic" onclick="togglePronounceRecording()" class="w-20 h-20 rounded-full bg-rose-600 hover:bg-rose-700 text-white flex items-center justify-center text-3xl shadow-lg transition">
+            🎙️
+          </button>
+          <p id="micStatusText" class="text-xs font-semibold text-slate-500 mt-3">Nhấn vào micro và đọc to tiếng Trung</p>
+        </div>
+
+        <!-- Recognition Result -->
+        <div id="pronResultBox" class="hidden mt-5 p-5 rounded-2xl bg-slate-50 border border-slate-200 text-left">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold uppercase text-slate-400">Kết quả nhận diện giọng nói</span>
+            <span id="pronScoreBadge" class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">100% Chính xác</span>
+          </div>
+          <p class="text-xs text-slate-500">Hệ thống nghe được:</p>
+          <p id="pronRecognizedText" class="hanzi text-2xl font-bold text-slate-900 mt-1">—</p>
+          <div id="pronCharDiff" class="mt-3 flex flex-wrap gap-1.5"></div>
+          <p id="pronAdvice" class="text-xs text-slate-600 mt-3 pt-2 border-t border-slate-200"></p>
+        </div>
+
+        <div id="pronBrowserWarning" class="hidden mt-4 p-3 rounded-xl bg-amber-50 text-amber-800 text-xs">
+          ⚠️ Trình duyệt hiện tại chưa hỗ trợ nhận diện giọng nói Web Speech API. Bạn hãy mở file này bằng <strong>Google Chrome</strong> hoặc <strong>Microsoft Edge</strong> để dùng tính năng chấm điểm phát âm bằng micro.
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 5: MATCHING GAME                       -->
+    <!-- ========================================== -->
+    <section id="view-match" class="view-section hidden">
+      <div class="max-w-3xl mx-auto">
+        <div class="flex items-center justify-between mb-4 bg-white p-4 rounded-2xl border border-slate-200">
+          <div>
+            <h2 class="font-bold text-slate-800">Ghép cặp Chữ Hán & Nghĩa tiếng Việt</h2>
+            <p class="text-xs text-slate-500">Chọn 1 thẻ tiếng Trung và 1 thẻ tiếng Việt tương ứng</p>
+          </div>
+          <div class="flex items-center gap-4">
+            <span class="font-mono font-bold text-lg text-rose-600" id="matchTimer">00:00</span>
+            <button onclick="initMatchGame()" class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold">🔄 Ván mới</button>
+          </div>
+        </div>
+        <div id="matchGrid" class="grid grid-cols-2 sm:grid-cols-4 gap-3"></div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 6: VOCAB LIST                          -->
+    <!-- ========================================== -->
+    <section id="view-list" class="view-section hidden">
+      <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold">
+                <th class="py-3.5 px-4">Cấp</th>
+                <th class="py-3.5 px-4">Chữ Hán</th>
+                <th class="py-3.5 px-4">Pinyin</th>
+                <th class="py-3.5 px-4">Nghĩa tiếng Việt</th>
+                <th class="py-3.5 px-4">Câu ví dụ</th>
+                <th class="py-3.5 px-4 text-right">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="vocabTableBody" class="divide-y divide-slate-100 text-sm"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL: ADD / EDIT WORD -->
+  <div id="wordModal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+        <h3 class="font-bold text-lg text-slate-900" id="modalTitle">Thêm từ mới / Bổ sung ví dụ</h3>
+        <button onclick="closeWordModal()" class="text-slate-400 hover:text-slate-700 text-xl font-bold">&times;</button>
+      </div>
+
+      <form id="wordForm" onsubmit="saveWordForm(event)" class="space-y-4">
+        <input type="hidden" id="editWordId" />
+        <div class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Cấp độ</label>
+            <select id="inputLevel" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm">
+              <option value="HSK1">HSK1</option>
+              <option value="HSK2" selected>HSK2</option>
+              <option value="HSK3">HSK3</option>
+              <option value="HSK4">HSK4</option>
+              <option value="HSK5">HSK5</option>
+              <option value="HSK6">HSK6</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Chữ Hán *</label>
+            <input type="text" id="inputHanzi" required class="w-full px-3 py-2 rounded-xl border border-slate-300 hanzi text-lg" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Pinyin *</label>
+            <input type="text" id="inputPinyin" required class="w-full px-3 py-2 rounded-xl border border-slate-300" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Từ loại</label>
+            <input type="text" id="inputPos" placeholder="VD: Động từ" class="w-full px-3 py-2 rounded-xl border border-slate-300" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Nghĩa tiếng Việt *</label>
+            <input type="text" id="inputMeaning" required class="w-full px-3 py-2 rounded-xl border border-slate-300" />
+          </div>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-600">Danh sách câu ví dụ</label>
+            <div class="space-x-2">
+              <button type="button" onclick="fillModalAutoExamples()" class="text-xs font-semibold text-amber-600 hover:underline">⚡ Tự sinh ví dụ</button>
+              <button type="button" onclick="addExampleInputRow()" class="text-xs font-semibold text-rose-600 hover:underline">+ Thêm dòng</button>
+            </div>
+          </div>
+          <div id="modalExamplesList" class="space-y-2"></div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex justify-end gap-2">
+          <button type="button" onclick="closeWordModal()" class="px-4 py-2 rounded-xl border border-slate-300 text-slate-600 font-semibold text-sm">Hủy</button>
+          <button type="submit" class="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-sm">💾 Lưu</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl text-sm font-medium transform translate-y-20 opacity-0 transition-all duration-300 z-50"></div>
+
+  <script src="hsk1_data.js"></script>
+  <script>
+    let vocabList = [];
+    let learnedIds = new Set(JSON.parse(localStorage.getItem('hsk_v2_learned') || '[]'));
+    let currentFiltered = [];
+    let fcIndex = 0;
+    let isFlipped = false;
+    let watchedFileHandle = null;
+    let lastFileModified = 0;
+    let watchInterval = null;
+
+    function initApp() {
+      const saved = localStorage.getItem('hsk_v2_vocab');
+      if (saved) {
+        vocabList = JSON.parse(saved);
+      } else {
+        vocabList = (typeof BASE_HSK1_DATA !== 'undefined' ? BASE_HSK1_DATA : []).map(item => ({
+          ...item,
+          level: item.level || 'HSK1'
+        }));
+      }
+      applyFilters();
+      checkHsk1MasteryBanner();
+    }
+
+    function saveData() {
+      localStorage.setItem('hsk_v2_vocab', JSON.stringify(vocabList));
+      localStorage.setItem('hsk_v2_learned', JSON.stringify([...learnedIds]));
+      checkHsk1MasteryBanner();
+    }
+
+    function checkHsk1MasteryBanner() {
+      const hsk1Words = vocabList.filter(w => w.level === 'HSK1');
+      if (hsk1Words.length === 0) return;
+      const allLearned = hsk1Words.every(w => learnedIds.has(w.id));
+      document.getElementById('hsk1MasterBanner').classList.toggle('hidden', !allLearned);
+    }
+
+    function normalizePinyin(str) {
+      return (str || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ü/g, 'v').replace(/\s+/g, '').toLowerCase();
+    }
+
+    function cleanChinesePunctuation(str) {
+      return (str || '').replace(/[，。！？、；：“”‘’（）《》〈〉【】·…—\s,.!?;:'"()\[\]-]/g, '');
+    }
+
+    // ==========================================
+    // AUTO EXAMPLE GENERATOR ENGINE
+    // ==========================================
+    function generateAutoExamples(hanzi, pinyin, meaning, pos = '') {
+      const pLower = (pos || '').toLowerCase();
+      const templates = [
+        {
+          zh: `我今天学习了“${hanzi}”。`,
+          vi: `Hôm nay tôi đã học từ “${hanzi}” (${meaning}).`
+        },
+        {
+          zh: `这个词“${hanzi}”（${pinyin}）在口语里很常用。`,
+          vi: `Từ “${hanzi}” (${pinyin}) rất hay dùng trong văn nói.`
+        }
+      ];
+      if (pLower.includes('động')) {
+        templates.push({
+          zh: `我们一起${hanzi}吧！`,
+          vi: `Chúng ta cùng ${meaning} nhé!`
+        });
+      } else if (pLower.includes('tính')) {
+        templates.push({
+          zh: `今天的情况非常${hanzi}。`,
+          vi: `Tình hình hôm nay rất ${meaning}.`
+        });
+      } else {
+        templates.push({
+          zh: `桌子上放着跟“${hanzi}”有关的东西。`,
+          vi: `Trên bàn có đồ liên quan đến “${hanzi}” (${meaning}).`
+        });
+      }
+      return templates;
+    }
+
+    function autoAddExampleToCurrentCard() {
+      if (currentFiltered.length === 0) return;
+      const w = currentFiltered[fcIndex];
+      const gen = generateAutoExamples(w.hanzi, w.pinyin, w.meaning, w.pos);
+      w.examples = w.examples || [];
+      let added = 0;
+      gen.forEach(ex => {
+        if (!w.examples.some(existing => existing.zh === ex.zh)) {
+          w.examples.push(ex);
+          added++;
+        }
+      });
+      if (added === 0) {
+        w.examples.push({
+          zh: `请用“${w.hanzi}”造一个句子。`,
+          vi: `Hãy đặt một câu với từ “${w.hanzi}” (${w.meaning}).`
+        });
+      }
+      w.isCustom = true;
+      saveData();
+      renderFlashcard();
+      renderVocabTable();
+      showToast(`⚡ Đã tự thêm ví dụ cho từ "${w.hanzi}"!`);
+    }
+
+    function autoGenerateExamplesForAll() {
+      let count = 0;
+      vocabList.forEach(w => {
+        if (!w.examples || w.examples.length === 0) {
+          w.examples = generateAutoExamples(w.hanzi, w.pinyin, w.meaning, w.pos);
+          w.isCustom = true;
+          count++;
+        }
+      });
+      saveData();
+      applyFilters();
+      showToast(count > 0
+        ? `⚡ Đã tự động thêm ví dụ cho ${count} từ vựng!`
+        : `✅ Tất cả từ vựng hiện tại đều đã có ví dụ!`);
+    }
+
+    // ==========================================
+    // UPLOAD & WATCH FILE FOR HSK 2-6
+    // ==========================================
+    async function handleUploadHskFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      await parseAndImportVocabFile(file);
+      event.target.value = '';
+    }
+
+    async function connectWatchFile() {
+      if (!('showOpenFilePicker' in window)) {
+        showToast('Hãy dùng nút "Up file HSK 2–6" hoặc mở trên Chrome/Edge.');
+        return;
+      }
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          types: [{
+            description: 'File từ vựng HSK (Excel, CSV, JSON)',
+            accept: {
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+              'text/csv': ['.csv'],
+              'application/json': ['.json']
+            }
+          }]
+        });
+        watchedFileHandle = handle;
+        lastFileModified = 0;
+        await checkWatchedFile(true);
+        if (watchInterval) clearInterval(watchInterval);
+        watchInterval = setInterval(() => checkWatchedFile(false), 2000);
+        document.getElementById('watchBtnLabel').textContent = 'Đang theo dõi: ' + handle.name;
+        document.getElementById('syncStatusText').textContent = `🔄 Tự động đồng bộ mỗi 2s từ file: ${handle.name}`;
+      } catch (err) {
+        if (err.name !== 'AbortError') showToast('Lỗi mở file: ' + err.message);
+      }
+    }
+
+    async function checkWatchedFile(isFirst) {
+      if (!watchedFileHandle) return;
+      const file = await watchedFileHandle.getFile();
+      if (file.lastModified > lastFileModified) {
+        lastFileModified = file.lastModified;
+        await parseAndImportVocabFile(file, isFirst);
+      }
+    }
+
+    async function parseAndImportVocabFile(file, notify = true) {
+      const ext = file.name.split('.').pop().toLowerCase();
+      let rows = [];
+      if (ext === 'json') {
+        const json = JSON.parse(await file.text());
+        rows = Array.isArray(json) ? json : (json.words || []);
+      } else {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+      }
+
+      const defaultSel = document.getElementById('uploadTargetLevel').value;
+      const fallbackLevel = (defaultSel === 'AUTO' || !defaultSel) ? 'HSK2' : defaultSel;
+
+      let added = 0;
+      let updated = 0;
+      let detectedLevels = new Set();
+
+      rows.forEach(r => {
+        const hanzi = String(r['Từ tiếng Trung'] || r['Hanzi'] || r['hanzi'] || r['Tu_tieng_Trung'] || '').trim();
+        if (!hanzi) return;
+
+        const rawLevel = String(r['Cấp độ'] || r['Level'] || r['level'] || r['HSK'] || '').trim().toUpperCase().replace(/\s+/g, '');
+        const level = (defaultSel !== 'AUTO' && defaultSel)
+          ? defaultSel
+          : (rawLevel || fallbackLevel);
+        detectedLevels.add(level);
+
+        const pinyin = String(r['Phiên âm'] || r['Pinyin'] || r['pinyin'] || '').trim();
+        const pos = String(r['Từ loại'] || r['POS'] || r['pos'] || 'Từ vựng').trim();
+        const meaning = String(r['Nghĩa tiếng Việt'] || r['Meaning'] || r['meaning'] || r['Nghia'] || '').trim();
+        const rawEx = String(r['Ví dụ'] || r['Example'] || r['examples'] || r['Vi_du'] || '').trim();
+
+        let examples = [];
+        if (rawEx) {
+          examples = rawEx.split(/\r?\n/).map(s => s.trim()).filter(Boolean).map(seg => {
+            const parts = seg.split('|');
+            return { zh: parts[0].trim(), vi: parts[1] ? parts[1].trim() : '' };
+          });
+        } else {
+          examples = generateAutoExamples(hanzi, pinyin, meaning, pos);
+        }
+
+        const idx = vocabList.findIndex(w => w.hanzi === hanzi && w.level === level);
+        if (idx >= 0) {
+          if (pinyin) vocabList[idx].pinyin = pinyin;
+          if (meaning) vocabList[idx].meaning = meaning;
+          if (pos) vocabList[idx].pos = pos;
+          examples.forEach(ex => {
+            if (!vocabList[idx].examples.some(e => e.zh === ex.zh)) {
+              vocabList[idx].examples.push(ex);
+            }
+          });
+          updated++;
+        } else {
+          const nextId = vocabList.length > 0 ? Math.max(...vocabList.map(w => w.id)) + 1 : 1;
+          vocabList.push({
+            id: nextId,
+            level,
+            hanzi,
+            pinyin,
+            pos,
+            meaning,
+            examples,
+            isCustom: true
+          });
+          added++;
+        }
+      });
+
+      saveData();
+
+      if (detectedLevels.size === 1) {
+        const onlyLvl = [...detectedLevels][0];
+        if (['HSK1','HSK2','HSK3','HSK4','HSK5','HSK6'].includes(onlyLvl)) {
+          document.getElementById('levelFilter').value = onlyLvl;
+        }
+      }
+
+      applyFilters();
+      if (notify) {
+        showToast(`✅ Đã nạp "${file.name}" (${[...detectedLevels].join(', ')}): +${added} từ mới, cập nhật ${updated} từ & tự bổ sung ví dụ!`);
+      }
+    }
+
+    function exportToExcel() {
+      const rows = vocabList.map(w => ({
+        'Cấp độ': w.level,
+        'Từ tiếng Trung': w.hanzi,
+        'Phiên âm': w.pinyin,
+        'Từ loại': w.pos,
+        'Nghĩa tiếng Việt': w.meaning,
+        'Ví dụ': (w.examples || []).map(e => e.vi ? `${e.zh} | ${e.vi}` : e.zh).join('')
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'TuVung_HSK');
+      XLSX.writeFile(wb, 'Kho_TuVung_HSK_CuaToi.xlsx');
+      showToast('⬇️ Đã xuất file Kho_TuVung_HSK_CuaToi.xlsx!');
+    }
+
+    // ==========================================
+    // FILTERING & RENDERING
+    // ==========================================
+    function applyFilters() {
+      const lvl = document.getElementById('levelFilter').value;
+      const status = document.getElementById('statusFilter').value;
+      const q = document.getElementById('searchInput').value.trim().toLowerCase();
+
+      const levelPool = lvl === 'ALL' ? vocabList : vocabList.filter(w => w.level === lvl);
+      const learnedInPool = levelPool.filter(w => learnedIds.has(w.id)).length;
+      document.getElementById('learnedProgressText').textContent = `${learnedInPool} / ${levelPool.length}`;
+      const pct = levelPool.length > 0 ? Math.round((learnedInPool / levelPool.length) * 100) : 0;
+      document.getElementById('learnedProgressBar').style.width = pct + '%';
+      document.getElementById('totalCountBadge').textContent = vocabList.length;
+
+      currentFiltered = levelPool.filter(w => {
+        if (status === 'learned' && !learnedIds.has(w.id)) return false;
+        if (status === 'unlearned' && learnedIds.has(w.id)) return false;
+        if (status === 'no-example' && (w.examples && w.examples.length > 0)) return false;
+        if (q) {
+          const norm = normalizePinyin(w.pinyin);
+          return w.hanzi.includes(q) || w.pinyin.toLowerCase().includes(q) || norm.includes(q) || w.meaning.toLowerCase().includes(q);
+        }
+        return true;
+      });
+
+      fcIndex = 0;
+      renderFlashcard();
+      renderVocabTable();
+      if (!document.getElementById('view-quiz').classList.contains('hidden')) generateQuizQuestion();
+      if (!document.getElementById('view-sentence').classList.contains('hidden')) initSentenceTest();
+      if (!document.getElementById('view-pronounce').classList.contains('hidden')) initPronounceTest();
+      if (!document.getElementById('view-match').classList.contains('hidden')) initMatchGame();
+    }
+
+    function renderFlashcard() {
+      isFlipped = false;
+      document.getElementById('flashcardInner').classList.remove('rotate-y-180');
+
+      if (currentFiltered.length === 0) {
+        document.getElementById('fcCounter').textContent = '0 / 0';
+        document.getElementById('fcHanzi').textContent = 'Trống';
+        document.getElementById('fcBackHanzi').textContent = '';
+        document.getElementById('fcPinyin').textContent = '';
+        document.getElementById('fcMeaning').textContent = 'Không có từ nào trong bộ lọc này';
+        document.getElementById('fcExamplesContainer').innerHTML = '';
+        return;
+      }
+
+      const w = currentFiltered[fcIndex];
+      document.getElementById('fcCounter').textContent = `Thẻ ${fcIndex + 1} / ${currentFiltered.length}`;
+      document.getElementById('fcLevelBadge').textContent = w.level || 'HSK1';
+      document.getElementById('fcPosBadge').textContent = w.pos || 'Từ vựng';
+      document.getElementById('fcHanzi').textContent = w.hanzi;
+      document.getElementById('fcBackHanzi').textContent = w.hanzi;
+      document.getElementById('fcPinyin').textContent = w.pinyin;
+      document.getElementById('fcMeaning').textContent = w.meaning;
+      document.getElementById('fcIdLabel').textContent = `#${w.id} • ${w.level}`;
+
+      const exBox = document.getElementById('fcExamplesContainer');
+      if (w.examples && w.examples.length > 0) {
+        exBox.innerHTML = w.examples.map(ex => `
+          <div class="p-2.5 rounded-xl bg-slate-50 border border-slate-100 flex items-start justify-between gap-2">
+            <div>
+              <p class="hanzi text-base font-medium text-slate-900">${ex.zh}</p>
+              ${ex.vi ? `<p class="text-xs text-slate-500 mt-0.5">${ex.vi}</p>` : ''}
+            </div>
+            <button onclick="event.stopPropagation(); speakText('${ex.zh.replace(/'/g, "\'")}')" class="text-slate-400 hover:text-rose-600 p-1">🔊</button>
+          </div>
+        `).join('');
+      } else {
+        exBox.innerHTML = `<p class="text-xs text-slate-400 italic">Chưa có ví dụ. Nhấn "⚡ Tự thêm ví dụ" để tạo ngay.</p>`;
+      }
+
+      const btn = document.getElementById('btnMarkLearned');
+      if (learnedIds.has(w.id)) {
+        btn.textContent = '🌟 Đã thuộc (Nhấn để bỏ đánh dấu)';
+        btn.className = 'flex-1 py-3 rounded-2xl bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold transition';
+      } else {
+        btn.textContent = '✅ Đánh dấu đã thuộc';
+        btn.className = 'flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm transition';
+      }
+    }
+
+    function flipCard() {
+      if (currentFiltered.length === 0) return;
+      isFlipped = !isFlipped;
+      document.getElementById('flashcardInner').classList.toggle('rotate-y-180', isFlipped);
+    }
+    function nextCard() { if (currentFiltered.length) { fcIndex = (fcIndex + 1) % currentFiltered.length; renderFlashcard(); } }
+    function prevCard() { if (currentFiltered.length) { fcIndex = (fcIndex - 1 + currentFiltered.length) % currentFiltered.length; renderFlashcard(); } }
+    function shuffleDeck() {
+      for (let i = currentFiltered.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [currentFiltered[i], currentFiltered[j]] = [currentFiltered[j], currentFiltered[i]];
+      }
+      fcIndex = 0;
+      renderFlashcard();
+      showToast('🔀 Đã xáo trộn thẻ!');
+    }
+    function toggleLearnedCurrent() {
+      if (!currentFiltered.length) return;
+      const id = currentFiltered[fcIndex].id;
+      if (learnedIds.has(id)) learnedIds.delete(id); else learnedIds.add(id);
+      saveData();
+      applyFilters();
+    }
+    function editCurrentCard() { if (currentFiltered.length) openEditModal(currentFiltered[fcIndex].id); }
+
+    // ==========================================
+    // TAB 2: KIỂM TRA TỪ VỰNG (6 CHẾ ĐỘ)
+    // ==========================================
+    let quizCurrentWord = null, quizScore = 0, quizStreak = 0;
+
+    function generateQuizQuestion() {
+      const pool = currentFiltered.length >= 4 ? currentFiltered : vocabList;
+      if (pool.length < 4) return;
+      const mode = document.getElementById('quizMode').value;
+      quizCurrentWord = pool[Math.floor(Math.random() * pool.length)];
+
+      const distractors = [];
+      while (distractors.length < 3) {
+        const c = pool[Math.floor(Math.random() * pool.length)];
+        if (c.id !== quizCurrentWord.id && !distractors.some(d => d.id === c.id)) distractors.push(c);
+      }
+      const opts = [quizCurrentWord, ...distractors].sort(() => Math.random() - 0.5);
+
+      const qMain = document.getElementById('quizQuestionMain');
+      const qSub = document.getElementById('quizQuestionSub');
+      const qHint = document.getElementById('quizPromptHint');
+      const optBox = document.getElementById('quizOptions');
+      const typeBox = document.getElementById('quizTypeBox');
+      const audioBtn = document.getElementById('quizAudioBtn');
+
+      document.getElementById('quizFeedback').classList.add('hidden');
+      document.getElementById('quizNextBtn').classList.add('hidden');
+      qSub.textContent = '';
+      audioBtn.classList.remove('hidden');
+
+      if (mode === 'type-hanzi') {
+        optBox.classList.add('hidden');
+        typeBox.classList.remove('hidden');
+        qHint.textContent = 'Nhập chữ Hán hoặc Pinyin tương ứng với nghĩa sau:';
+        qMain.textContent = quizCurrentWord.meaning;
+        qMain.className = 'text-2xl font-bold text-slate-900 my-4';
+        qSub.textContent = `Từ loại: ${quizCurrentWord.pos || 'Từ vựng'} • Cấp độ: ${quizCurrentWord.level}`;
+        const inp = document.getElementById('quizTypeInput');
+        inp.value = '';
+        inp.disabled = false;
+        setTimeout(() => inp.focus(), 50);
+        return;
+      }
+
+      optBox.classList.remove('hidden');
+      typeBox.classList.add('hidden');
+
+      if (mode === 'hanzi-to-vi') {
+        qHint.textContent = 'Chọn nghĩa tiếng Việt đúng:';
+        qMain.textContent = quizCurrentWord.hanzi;
+        qMain.className = 'hanzi text-6xl font-bold text-slate-900 my-4';
+        speakText(quizCurrentWord.hanzi);
+      } else if (mode === 'vi-to-hanzi') {
+        qHint.textContent = 'Chọn Chữ Hán tương ứng:';
+        qMain.textContent = quizCurrentWord.meaning;
+        qMain.className = 'text-2xl font-bold text-slate-900 my-6';
+      } else if (mode === 'pinyin-to-hanzi') {
+        qHint.textContent = 'Nhìn Pinyin & nghĩa, chọn Chữ Hán đúng:';
+        qMain.textContent = quizCurrentWord.pinyin;
+        qMain.className = 'text-4xl font-bold text-rose-600 my-4';
+        qSub.textContent = `Nghĩa: ${quizCurrentWord.meaning}`;
+      } else if (mode === 'audio-to-vi') {
+        qHint.textContent = 'Nghe phát âm và chọn nghĩa đúng:';
+        qMain.textContent = '🎧';
+        qMain.className = 'text-6xl my-4';
+        speakText(quizCurrentWord.hanzi);
+      } else if (mode === 'fill-blank') {
+        qHint.textContent = 'Chọn từ thích hợp điền vào chỗ trống:';
+        const exList = (quizCurrentWord.examples || []).filter(e => e.zh && e.zh.includes(quizCurrentWord.hanzi));
+        const chosenEx = exList.length > 0
+          ? exList[0]
+          : { zh: `我今天学习了“${quizCurrentWord.hanzi}”。`, vi: `Hôm nay tôi đã học từ này (${quizCurrentWord.meaning}).` };
+        const masked = chosenEx.zh.replace(quizCurrentWord.hanzi, ' [ ___ ] ');
+        qMain.textContent = masked;
+        qMain.className = 'hanzi text-2xl font-bold text-slate-900 my-4 leading-relaxed';
+        qSub.textContent = chosenEx.vi || `Gợi ý nghĩa từ cần điền: ${quizCurrentWord.meaning}`;
+        audioBtn.classList.add('hidden');
+      }
+
+      optBox.innerHTML = opts.map(o => {
+        let lbl = '';
+        if (mode === 'vi-to-hanzi' || mode === 'pinyin-to-hanzi' || mode === 'fill-blank') {
+          lbl = `<span class="hanzi text-2xl font-bold mr-2">${o.hanzi}</span> <span class="text-slate-500 text-sm">(${o.pinyin})</span>`;
+        } else {
+          lbl = `<span class="font-semibold">${o.meaning}</span>`;
+        }
+        return `<button onclick="checkQuizAnswer(${o.id}, this)" class="quiz-opt-btn w-full text-left p-4 rounded-2xl border border-slate-200 hover:border-rose-400 transition">${lbl}</button>`;
+      }).join('');
+    }
+
+    function checkQuizAnswer(id, el) {
+      document.querySelectorAll('.quiz-opt-btn').forEach(b => b.disabled = true);
+      const fb = document.getElementById('quizFeedback');
+      fb.classList.remove('hidden');
+      if (id === quizCurrentWord.id) {
+        el.classList.add('bg-emerald-50', 'border-emerald-500');
+        quizScore += 10; quizStreak++;
+        fb.className = 'mt-5 p-4 rounded-2xl bg-emerald-50 text-emerald-800 text-sm';
+        fb.innerHTML = `🎉 <strong>Chính xác!</strong> <span class="hanzi font-bold text-base">${quizCurrentWord.hanzi}</span> (${quizCurrentWord.pinyin}) = ${quizCurrentWord.meaning}`;
+        speakText(quizCurrentWord.hanzi);
+      } else {
+        el.classList.add('bg-rose-50', 'border-rose-500');
+        quizStreak = 0;
+        fb.className = 'mt-5 p-4 rounded-2xl bg-rose-50 text-rose-800 text-sm';
+        fb.innerHTML = `❌ <strong>Chưa đúng!</strong> Đáp án: <span class="hanzi font-bold text-base">${quizCurrentWord.hanzi}</span> (${quizCurrentWord.pinyin}) — ${quizCurrentWord.meaning}`;
+      }
+      document.getElementById('quizScore').textContent = quizScore;
+      document.getElementById('quizStreak').textContent = quizStreak;
+      document.getElementById('quizNextBtn').classList.remove('hidden');
+    }
+
+    function checkTypedQuizAnswer() {
+      const inp = document.getElementById('quizTypeInput');
+      const val = inp.value.trim();
+      if (!val || inp.disabled) return;
+      inp.disabled = true;
+
+      const isHanziMatch = val === quizCurrentWord.hanzi;
+      const isPinyinMatch = normalizePinyin(val) === normalizePinyin(quizCurrentWord.pinyin);
+      const fb = document.getElementById('quizFeedback');
+      fb.classList.remove('hidden');
+
+      if (isHanziMatch || isPinyinMatch) {
+        quizScore += 15; quizStreak++;
+        fb.className = 'mt-5 p-4 rounded-2xl bg-emerald-50 text-emerald-800 text-sm';
+        fb.innerHTML = `🎉 <strong>Xuất sắc!</strong> Đáp án chuẩn: <span class="hanzi font-bold text-lg">${quizCurrentWord.hanzi}</span> (${quizCurrentWord.pinyin}) — ${quizCurrentWord.meaning}`;
+        speakText(quizCurrentWord.hanzi);
+      } else {
+        quizStreak = 0;
+        fb.className = 'mt-5 p-4 rounded-2xl bg-rose-50 text-rose-800 text-sm';
+        fb.innerHTML = `❌ <strong>Chưa chính xác!</strong> Bạn nhập: "${val}". Đáp án đúng: <span class="hanzi font-bold text-lg">${quizCurrentWord.hanzi}</span> (${quizCurrentWord.pinyin})`;
+      }
+      document.getElementById('quizScore').textContent = quizScore;
+      document.getElementById('quizStreak').textContent = quizStreak;
+      document.getElementById('quizNextBtn').classList.remove('hidden');
+    }
+
+    // ==========================================
+    // TAB 3: KIỂM TRA ĐẶT CÂU (SENTENCE TEST)
+    // ==========================================
+    let sentCurrentWord = null;
+    let sentTargetSentence = '';
+    let sentTokens = [];
+    let sentSelectedIndices = [];
+    let sentenceDoneCount = 0;
+
+    function tokenizeChineseSentence(sentence, targetWord) {
+      let clean = sentence.trim();
+      // Keep targetWord intact as a single chunk
+      const parts = clean.split(targetWord);
+      let tokens = [];
+      parts.forEach((part, idx) => {
+        // Group punctuation with preceding character or split characters/pairs
+        const chars = Array.from(part);
+        let i = 0;
+        while (i < chars.length) {
+          if (/[，。！？、；：]/.test(chars[i])) {
+            if (tokens.length > 0) tokens[tokens.length - 1] += chars[i];
+            else tokens.push(chars[i]);
+            i++;
+          } else if (i + 1 < chars.length && !/[，。！？、；：“”‘’]/.test(chars[i + 1]) && Math.random() > 0.45) {
+            tokens.push(chars[i] + chars[i + 1]);
+            i += 2;
+          } else {
+            tokens.push(chars[i]);
+            i++;
+          }
+        }
+        if (idx < parts.length - 1) {
+          tokens.push(targetWord);
+        }
+      });
+      return tokens.filter(t => t.trim().length > 0);
+    }
+
+    function initSentenceTest() {
+      const pool = currentFiltered.length > 0 ? currentFiltered : vocabList;
+      if (pool.length === 0) return;
+
+      const mode = document.getElementById('sentenceMode').value;
+      sentCurrentWord = pool[Math.floor(Math.random() * pool.length)];
+
+      document.getElementById('sentTargetHanzi').textContent = sentCurrentWord.hanzi;
+      document.getElementById('sentTargetPinyin').textContent = sentCurrentWord.pinyin;
+      document.getElementById('sentTargetPos').textContent = sentCurrentWord.pos || 'Từ vựng';
+      document.getElementById('sentTargetMeaning').textContent = `Nghĩa: ${sentCurrentWord.meaning}`;
+      document.getElementById('sentFeedback').classList.add('hidden');
+      document.getElementById('sentNextBtn').classList.add('hidden');
+
+      if (mode === 'scramble') {
+        document.getElementById('sentScrambleArea').classList.remove('hidden');
+        document.getElementById('sentComposeArea').classList.add('hidden');
+
+        // Pick best example sentence
+        const validEx = (sentCurrentWord.examples || []).filter(e => e.zh && e.zh.length >= 3);
+        const chosenEx = validEx.length > 0
+          ? validEx[Math.floor(Math.random() * validEx.length)]
+          : { zh: `我今天学习了${sentCurrentWord.hanzi}。`, vi: `Hôm nay tôi đã học từ ${sentCurrentWord.hanzi} (${sentCurrentWord.meaning}).` };
+
+        sentTargetSentence = chosenEx.zh.trim();
+        document.getElementById('sentScrambleHintVi').textContent = chosenEx.vi || `Hãy ghép thành câu tiếng Trung hoàn chỉnh có chứa "${sentCurrentWord.hanzi}"`;
+
+        const rawTokens = tokenizeChineseSentence(sentTargetSentence, sentCurrentWord.hanzi);
+        sentTokens = rawTokens.map((text, idx) => ({ id: idx, text })).sort(() => Math.random() - 0.5);
+        sentSelectedIndices = [];
+        renderScrambleUI();
+      } else {
+        document.getElementById('sentScrambleArea').classList.add('hidden');
+        document.getElementById('sentComposeArea').classList.remove('hidden');
+        document.getElementById('sentComposeKeyword').textContent = sentCurrentWord.hanzi;
+        document.getElementById('sentComposeInput').value = '';
+        document.getElementById('sentSampleBox').classList.add('hidden');
+      }
+    }
+
+    function renderScrambleUI() {
+      const slotEl = document.getElementById('sentAnswerSlot');
+      const bankEl = document.getElementById('sentTileBank');
+
+      if (sentSelectedIndices.length === 0) {
+        slotEl.innerHTML = `<span class="text-xs text-slate-400 italic">Nhấn vào các mảnh ghép bên dưới để xếp câu tại đây...</span>`;
+      } else {
+        slotEl.innerHTML = sentSelectedIndices.map((tokenIdx, posIdx) => `
+          <button onclick="removeScrambleToken(${posIdx})" class="px-3.5 py-2 rounded-xl bg-rose-600 text-white hanzi text-lg font-bold shadow-sm hover:bg-rose-700 transition">
+            ${sentTokens[tokenIdx].text}
+          </button>
+        `).join('');
+      }
+
+      bankEl.innerHTML = sentTokens.map((tok, idx) => {
+        const used = sentSelectedIndices.includes(idx);
+        return `
+          <button onclick="pickScrambleToken(${idx})" ${used ? 'disabled' : ''} class="px-4 py-2.5 rounded-xl border-2 hanzi text-lg font-bold transition ${
+            used
+              ? 'border-slate-100 bg-slate-100 text-slate-300 cursor-not-allowed'
+              : 'border-slate-200 bg-white hover:border-rose-400 text-slate-800 shadow-sm'
+          }">
+            ${tok.text}
+          </button>
+        `;
+      }).join('');
+    }
+
+    function pickScrambleToken(idx) {
+      if (!sentSelectedIndices.includes(idx)) {
+        sentSelectedIndices.push(idx);
+        renderScrambleUI();
+      }
+    }
+
+    function removeScrambleToken(posIdx) {
+      sentSelectedIndices.splice(posIdx, 1);
+      renderScrambleUI();
+    }
+
+    function resetScrambleSlots() {
+      sentSelectedIndices = [];
+      document.getElementById('sentFeedback').classList.add('hidden');
+      renderScrambleUI();
+    }
+
+    function checkScrambleSentence() {
+      if (sentSelectedIndices.length === 0) {
+        showToast('Hãy chọn các mảnh ghép để tạo câu trước!');
+        return;
+      }
+      const userSent = sentSelectedIndices.map(i => sentTokens[i].text).join('');
+      const isExact = cleanChinesePunctuation(userSent) === cleanChinesePunctuation(sentTargetSentence);
+      const fb = document.getElementById('sentFeedback');
+      fb.classList.remove('hidden');
+
+      if (isExact) {
+        sentenceDoneCount++;
+        document.getElementById('sentenceDoneCount').textContent = sentenceDoneCount;
+        fb.className = 'mt-5 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm';
+        fb.innerHTML = `🎉 <strong>Hoàn hảo!</strong> Câu chuẩn xác: <span class="hanzi text-lg font-bold ml-1">${sentTargetSentence}</span>`;
+        speakText(sentTargetSentence);
+        document.getElementById('sentNextBtn').classList.remove('hidden');
+      } else {
+        fb.className = 'mt-5 p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-sm';
+        fb.innerHTML = `❌ <strong>Thứ tự chưa chính xác!</strong><br/>Câu của bạn: <span class="hanzi font-bold">${userSent}</span><br/>Đáp án gợi ý: <span class="hanzi font-bold text-emerald-700">${sentTargetSentence}</span>`;
+        document.getElementById('sentNextBtn').classList.remove('hidden');
+      }
+    }
+
+    function toggleSampleSentences() {
+      const box = document.getElementById('sentSampleBox');
+      if (!box.classList.contains('hidden')) {
+        box.classList.add('hidden');
+        return;
+      }
+      const exs = (sentCurrentWord.examples && sentCurrentWord.examples.length > 0)
+        ? sentCurrentWord.examples
+        : generateAutoExamples(sentCurrentWord.hanzi, sentCurrentWord.pinyin, sentCurrentWord.meaning, sentCurrentWord.pos);
+
+      box.innerHTML = `<p class="text-xs font-bold text-amber-800 uppercase">Câu mẫu tham khảo:</p>` + exs.map(e => `
+        <div class="flex items-center justify-between gap-2 text-sm bg-white p-2.5 rounded-xl border border-amber-100">
+          <div>
+            <p class="hanzi font-bold text-slate-900">${e.zh}</p>
+            <p class="text-xs text-slate-500">${e.vi || ''}</p>
+          </div>
+          <button onclick="speakText('${e.zh.replace(/'/g, "\'")}')" class="text-rose-600 p-1">🔊</button>
+        </div>
+      `).join('');
+      box.classList.remove('hidden');
+    }
+
+    function evaluateComposedSentence() {
+      const text = document.getElementById('sentComposeInput').value.trim();
+      const fb = document.getElementById('sentFeedback');
+      fb.classList.remove('hidden');
+
+      if (!text) {
+        fb.className = 'mt-5 p-4 rounded-2xl bg-amber-50 text-amber-800 text-sm';
+        fb.textContent = '⚠️ Bạn chưa nhập câu tiếng Trung nào!';
+        return;
+      }
+
+      const hasKeyword = text.includes(sentCurrentWord.hanzi);
+      const hasChineseChars = /[一-龥]/.test(text);
+      const hasEnoughLength = cleanChinesePunctuation(text).length > sentCurrentWord.hanzi.length + 1;
+
+      if (!hasChineseChars) {
+        fb.className = 'mt-5 p-4 rounded-2xl bg-rose-50 text-rose-800 text-sm';
+        fb.innerHTML = `❌ Vui lòng nhập câu bằng <strong>Chữ Hán</strong> (hệ thống chưa thấy ký tự tiếng Trung).`;
+        return;
+      }
+
+      if (!hasKeyword) {
+        fb.className = 'mt-5 p-4 rounded-2xl bg-rose-50 text-rose-800 text-sm';
+        fb.innerHTML = `❌ Câu của bạn chưa chứa từ khóa <span class="hanzi font-bold text-base">${sentCurrentWord.hanzi}</span>. Hãy bổ sung từ này vào câu nhé!`;
+        return;
+      }
+
+      if (!hasEnoughLength) {
+        fb.className = 'mt-5 p-4 rounded-2xl bg-amber-50 text-amber-800 text-sm';
+        fb.innerHTML = `⚠️ Câu hơi ngắn! Hãy mở rộng thêm chủ ngữ hoặc vị ngữ để thành câu hoàn chỉnh với từ <span class="hanzi font-bold">${sentCurrentWord.hanzi}</span>.`;
+        return;
+      }
+
+      // Valid sentence -> save to word's examples!
+      const formattedSent = /[。！？!?]$/.test(text) ? text : text + '。';
+      sentCurrentWord.examples = sentCurrentWord.examples || [];
+      if (!sentCurrentWord.examples.some(e => e.zh === formattedSent)) {
+        sentCurrentWord.examples.unshift({
+          zh: formattedSent,
+          vi: '✍️ Câu tự đặt của bạn'
+        });
+        sentCurrentWord.isCustom = true;
+        saveData();
+        renderVocabTable();
+      }
+
+      sentenceDoneCount++;
+      document.getElementById('sentenceDoneCount').textContent = sentenceDoneCount;
+      fb.className = 'mt-5 p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-sm';
+      fb.innerHTML = `🌟 <strong>Đạt yêu cầu!</strong> Câu <span class="hanzi font-bold text-base">“${formattedSent}”</span> sử dụng đúng từ khóa và đã được lưu vào kho ví dụ của từ <span class="hanzi font-bold">${sentCurrentWord.hanzi}</span>.`;
+      speakText(formattedSent);
+      document.getElementById('sentNextBtn').classList.remove('hidden');
+    }
+
+    // ==========================================
+    // TAB 4: KIỂM TRA PHÁT ÂM (SPEECH RECOGNITION)
+    // ==========================================
+    let pronCurrentWord = null;
+    let pronTargetHanzi = '';
+    let recognition = null;
+    let isRecording = false;
+    let pronScores = [];
+
+    function setupSpeechRecognition() {
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRec) {
+        document.getElementById('pronBrowserWarning').classList.remove('hidden');
+        return null;
+      }
+      const rec = new SpeechRec();
+      rec.lang = 'zh-CN';
+      rec.interimResults = false;
+      rec.maxAlternatives = 3;
+
+      rec.onstart = () => {
+        isRecording = true;
+        const btn = document.getElementById('btnRecordMic');
+        btn.classList.add('recording-pulse', 'bg-red-600');
+        document.getElementById('micStatusText').textContent = '🔴 Đang nghe... Hãy đọc to tiếng Trung!';
+      };
+
+      rec.onresult = (event) => {
+        const transcripts = [];
+        for (let i = 0; i < event.results[0].length; i++) {
+          transcripts.push(event.results[0][i].transcript);
+        }
+        evaluatePronunciation(transcripts);
+      };
+
+      rec.onerror = (event) => {
+        stopRecordingUI();
+        if (event.error === 'no-speech') {
+          showToast('Không nghe thấy giọng nói. Hãy thử lại gần micro hơn!');
+        } else if (event.error === 'not-allowed') {
+          showToast('Trình duyệt bị chặn quyền Micro. Hãy cấp quyền Micro ở thanh địa chỉ!');
+        } else {
+          showToast('Lỗi nhận diện giọng nói: ' + event.error);
+        }
+      };
+
+      rec.onend = () => {
+        stopRecordingUI();
+      };
+
+      return rec;
+    }
+
+    function stopRecordingUI() {
+      isRecording = false;
+      const btn = document.getElementById('btnRecordMic');
+      btn.classList.remove('recording-pulse', 'bg-red-600');
+      document.getElementById('micStatusText').textContent = 'Nhấn vào micro và đọc to tiếng Trung';
+    }
+
+    function togglePronounceRecording() {
+      if (!recognition) {
+        recognition = setupSpeechRecognition();
+        if (!recognition) return;
+      }
+      if (isRecording) {
+        recognition.stop();
+      } else {
+        document.getElementById('pronResultBox').classList.add('hidden');
+        try {
+          recognition.start();
+        } catch (e) {
+          recognition.stop();
+        }
+      }
+    }
+
+    function initPronounceTest() {
+      const pool = currentFiltered.length > 0 ? currentFiltered : vocabList;
+      if (pool.length === 0) return;
+
+      const mode = document.getElementById('pronounceMode').value;
+      pronCurrentWord = pool[Math.floor(Math.random() * pool.length)];
+      document.getElementById('pronLevelTag').textContent = pronCurrentWord.level || 'HSK1';
+      document.getElementById('pronResultBox').classList.add('hidden');
+
+      if (mode === 'word') {
+        pronTargetHanzi = pronCurrentWord.hanzi;
+        document.getElementById('pronTargetText').textContent = pronCurrentWord.hanzi;
+        document.getElementById('pronTargetText').className = 'hanzi text-6xl font-bold text-slate-900 mt-4 mb-2';
+        document.getElementById('pronTargetPinyin').textContent = pronCurrentWord.pinyin;
+        document.getElementById('pronTargetMeaning').textContent = pronCurrentWord.meaning;
+      } else {
+        const exs = (pronCurrentWord.examples || []).filter(e => e.zh && e.zh.length >= 2);
+        const ex = exs.length > 0
+          ? exs[0]
+          : { zh: `我今天学习了${pronCurrentWord.hanzi}。`, vi: `Hôm nay tôi đã học từ ${pronCurrentWord.hanzi}.` };
+        pronTargetHanzi = ex.zh;
+        document.getElementById('pronTargetText').textContent = ex.zh;
+        document.getElementById('pronTargetText').className = 'hanzi text-3xl font-bold text-slate-900 mt-4 mb-2 leading-relaxed';
+        document.getElementById('pronTargetPinyin').textContent = `Từ khóa: ${pronCurrentWord.hanzi} (${pronCurrentWord.pinyin})`;
+        document.getElementById('pronTargetMeaning').textContent = ex.vi || pronCurrentWord.meaning;
+      }
+    }
+
+    function evaluatePronunciation(transcripts) {
+      const targetClean = cleanChinesePunctuation(pronTargetHanzi);
+      const targetChars = Array.from(targetClean);
+
+      let bestTranscript = transcripts[0] || '';
+      let bestScore = 0;
+
+      transcripts.forEach(tr => {
+        const spokenClean = cleanChinesePunctuation(tr);
+        if (spokenClean.includes(targetClean)) {
+          bestScore = 100;
+          bestTranscript = tr;
+          return;
+        }
+        let matched = 0;
+        const spokenChars = Array.from(spokenClean);
+        targetChars.forEach(ch => {
+          if (spokenChars.includes(ch)) matched++;
+        });
+        const sc = targetChars.length > 0 ? Math.round((matched / targetChars.length) * 100) : 0;
+        if (sc >= bestScore) {
+          bestScore = sc;
+          bestTranscript = tr;
+        }
+      });
+
+      pronScores.push(bestScore);
+      const avg = Math.round(pronScores.reduce((a, b) => a + b, 0) / pronScores.length);
+      document.getElementById('pronounceAvgScore').textContent = avg + '%';
+
+      const resBox = document.getElementById('pronResultBox');
+      resBox.classList.remove('hidden');
+      document.getElementById('pronRecognizedText').textContent = bestTranscript || '(Không nhận diện được chữ)';
+
+      const badge = document.getElementById('pronScoreBadge');
+      const advice = document.getElementById('pronAdvice');
+      if (bestScore >= 85) {
+        badge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700';
+        badge.textContent = `🌟 ${bestScore}% Tuyệt vời`;
+        advice.textContent = 'Phát âm rất chuẩn xác, thanh điệu rõ ràng! Bạn có thể chuyển sang từ tiếp theo.';
+      } else if (bestScore >= 50) {
+        badge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700';
+        badge.textContent = `👍 ${bestScore}% Khá tốt`;
+        advice.textContent = 'Gần chuẩn rồi! Hãy bấm "Nghe đọc chậm" để đối chiếu thanh điệu các chữ màu đỏ.';
+      } else {
+        badge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-700';
+        badge.textContent = `🔄 ${bestScore}% Cần luyện thêm`;
+        advice.textContent = 'Hệ thống nhận diện chưa khớp. Hãy nghe lại mẫu, chú ý bật hơi (zh, ch, sh, q, x) và thanh 3/thanh 4.';
+      }
+
+      const spokenSet = new Set(Array.from(cleanChinesePunctuation(bestTranscript)));
+      document.getElementById('pronCharDiff').innerHTML = targetChars.map(ch => {
+        const ok = spokenSet.has(ch);
+        return `<span class="hanzi px-2.5 py-1 rounded-lg text-lg font-bold ${ok ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'}">${ch}</span>`;
+      }).join('');
+    }
+
+    // ==========================================
+    // MODAL & TABLE
+    // ==========================================
+    function openAddModal() {
+      document.getElementById('modalTitle').textContent = '➕ Thêm từ mới';
+      document.getElementById('editWordId').value = '';
+      const activeLvl = document.getElementById('levelFilter').value;
+      document.getElementById('inputLevel').value = activeLvl === 'ALL' ? 'HSK2' : activeLvl;
+      document.getElementById('inputHanzi').value = '';
+      document.getElementById('inputPinyin').value = '';
+      document.getElementById('inputPos').value = '';
+      document.getElementById('inputMeaning').value = '';
+      document.getElementById('modalExamplesList').innerHTML = '';
+      addExampleInputRow();
+      document.getElementById('wordModal').classList.remove('hidden');
+    }
+
+    function openEditModal(id) {
+      const w = vocabList.find(x => x.id === id);
+      if (!w) return;
+      document.getElementById('modalTitle').textContent = `✏️ Sửa từ: ${w.hanzi}`;
+      document.getElementById('editWordId').value = w.id;
+      document.getElementById('inputLevel').value = w.level || 'HSK1';
+      document.getElementById('inputHanzi').value = w.hanzi;
+      document.getElementById('inputPinyin').value = w.pinyin;
+      document.getElementById('inputPos').value = w.pos || '';
+      document.getElementById('inputMeaning').value = w.meaning;
+      const list = document.getElementById('modalExamplesList');
+      list.innerHTML = '';
+      if (w.examples && w.examples.length) w.examples.forEach(ex => addExampleInputRow(ex.zh, ex.vi));
+      else addExampleInputRow();
+      document.getElementById('wordModal').classList.remove('hidden');
+    }
+
+    function closeWordModal() { document.getElementById('wordModal').classList.add('hidden'); }
+
+    function addExampleInputRow(zh = '', vi = '') {
+      const c = document.getElementById('modalExamplesList');
+      const d = document.createElement('div');
+      d.className = 'flex gap-2 items-center example-row';
+      d.innerHTML = `
+        <input type="text" placeholder="Câu tiếng Trung" value="${zh.replace(/"/g, '&quot;')}" class="ex-zh flex-1 px-3 py-2 rounded-xl border border-slate-300 hanzi text-sm" />
+        <input type="text" placeholder="Nghĩa tiếng Việt" value="${vi.replace(/"/g, '&quot;')}" class="ex-vi flex-1 px-3 py-2 rounded-xl border border-slate-300 text-sm" />
+        <button type="button" onclick="this.parentElement.remove()" class="text-rose-500 font-bold px-2">&times;</button>
+      `;
+      c.appendChild(d);
+    }
+
+    function fillModalAutoExamples() {
+      const hz = document.getElementById('inputHanzi').value.trim();
+      const py = document.getElementById('inputPinyin').value.trim();
+      const mn = document.getElementById('inputMeaning').value.trim();
+      const pos = document.getElementById('inputPos').value.trim();
+      if (!hz || !mn) { showToast('Hãy nhập Chữ Hán và Nghĩa tiếng Việt trước!'); return; }
+      const gen = generateAutoExamples(hz, py, mn, pos);
+      const list = document.getElementById('modalExamplesList');
+      list.innerHTML = '';
+      gen.forEach(e => addExampleInputRow(e.zh, e.vi));
+    }
+
+    function saveWordForm(e) {
+      e.preventDefault();
+      const idVal = document.getElementById('editWordId').value;
+      const level = document.getElementById('inputLevel').value;
+      const hanzi = document.getElementById('inputHanzi').value.trim();
+      const pinyin = document.getElementById('inputPinyin').value.trim();
+      const pos = document.getElementById('inputPos').value.trim() || 'Từ vựng';
+      const meaning = document.getElementById('inputMeaning').value.trim();
+      let examples = [];
+      document.querySelectorAll('#modalExamplesList .example-row').forEach(r => {
+        const zh = r.querySelector('.ex-zh').value.trim();
+        const vi = r.querySelector('.ex-vi').value.trim();
+        if (zh) examples.push({ zh, vi });
+      });
+      if (examples.length === 0) examples = generateAutoExamples(hanzi, pinyin, meaning, pos);
+
+      if (idVal) {
+        const idx = vocabList.findIndex(x => x.id === Number(idVal));
+        if (idx >= 0) vocabList[idx] = { ...vocabList[idx], level, hanzi, pinyin, pos, meaning, examples, isCustom: true };
+      } else {
+        const nextId = vocabList.length > 0 ? Math.max(...vocabList.map(x => x.id)) + 1 : 1;
+        vocabList.push({ id: nextId, level, hanzi, pinyin, pos, meaning, examples, isCustom: true });
+      }
+      saveData();
+      applyFilters();
+      closeWordModal();
+      showToast(`✅ Đã lưu từ "${hanzi}" (${level})!`);
+    }
+
+    function renderVocabTable() {
+      const tbody = document.getElementById('vocabTableBody');
+      tbody.innerHTML = currentFiltered.map(w => {
+        const exHtml = (w.examples || []).map(e => `
+          <div class="mb-1 last:mb-0">
+            <span class="hanzi text-slate-800">${e.zh}</span>
+            ${e.vi ? `<span class="text-xs text-slate-500 block">${e.vi}</span>` : ''}
+          </div>
+        `).join('') || '<span class="text-xs text-amber-600 italic">Chưa có ví dụ</span>';
+
+        return `
+          <tr class="hover:bg-slate-50">
+            <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-100 text-xs font-bold">${w.level}</span></td>
+            <td class="py-3 px-4"><span class="hanzi text-xl font-bold">${w.hanzi}</span> <button onclick="speakText('${w.hanzi.replace(/'/g, "\'")}')" class="text-slate-400 hover:text-rose-600 ml-1">🔊</button></td>
+            <td class="py-3 px-4 text-rose-600 font-medium">${w.pinyin}</td>
+            <td class="py-3 px-4 font-medium">${w.meaning}</td>
+            <td class="py-3 px-4 max-w-xs">${exHtml}</td>
+            <td class="py-3 px-4 text-right whitespace-nowrap space-x-1">
+              <button onclick="autoAddExampleById(${w.id})" class="px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700 hover:bg-amber-100 text-xs font-semibold">⚡ +Ví dụ</button>
+              <button onclick="openEditModal(${w.id})" class="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 text-xs font-semibold">✏️ Sửa</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function autoAddExampleById(id) {
+      const w = vocabList.find(x => x.id === id);
+      if (!w) return;
+      w.examples = w.examples || [];
+      const gen = generateAutoExamples(w.hanzi, w.pinyin, w.meaning, w.pos);
+      gen.forEach(ex => { if (!w.examples.some(e => e.zh === ex.zh)) w.examples.push(ex); });
+      saveData();
+      applyFilters();
+      showToast(`⚡ Đã thêm ví dụ cho "${w.hanzi}"!`);
+    }
+
+    // ==========================================
+    // MATCHING GAME
+    // ==========================================
+    let matchSelected = null, matchCount = 0, matchSec = 0, matchInt = null;
+    function initMatchGame() {
+      const pool = currentFiltered.length >= 6 ? currentFiltered : vocabList;
+      if (pool.length < 6) return;
+      clearInterval(matchInt); matchSec = 0; matchCount = 0; matchSelected = null;
+      document.getElementById('matchTimer').textContent = '00:00';
+      matchInt = setInterval(() => { matchSec++; document.getElementById('matchTimer').textContent = `${String(Math.floor(matchSec/60)).padStart(2,'0')}:${String(matchSec%60).padStart(2,'0')}`; }, 1000);
+      const chosen = [...pool].sort(() => Math.random() - 0.5).slice(0, 6);
+      const cards = [];
+      chosen.forEach(w => { cards.push({ id: w.id, type: 'zh', text: w.hanzi, sub: w.pinyin }); cards.push({ id: w.id, type: 'vi', text: w.meaning, sub: '' }); });
+      cards.sort(() => Math.random() - 0.5);
+      document.getElementById('matchGrid').innerHTML = cards.map((c, i) => `
+        <button onclick="selectMatch(${i}, ${c.id}, '${c.type}', this)" class="h-28 p-3 rounded-2xl bg-white border-2 border-slate-200 hover:border-rose-400 flex flex-col items-center justify-center text-center shadow-sm transition">
+          <span class="${c.type==='zh'?'hanzi text-2xl font-bold text-slate-900':'text-sm font-semibold text-slate-700'}">${c.text}</span>
+          ${c.sub?`<span class="text-xs text-rose-600 mt-1">${c.sub}</span>`:''}
+        </button>
+      `).join('');
+    }
+    function selectMatch(idx, id, type, el) {
+      if (el.classList.contains('opacity-30')) return;
+      if (type === 'zh') speakText(el.querySelector('span').textContent);
+      if (!matchSelected) { matchSelected = { idx, id, type, el }; el.classList.add('border-rose-600', 'bg-rose-50'); return; }
+      if (matchSelected.idx === idx) { el.classList.remove('border-rose-600', 'bg-rose-50'); matchSelected = null; return; }
+      if (matchSelected.id === id && matchSelected.type !== type) {
+        matchSelected.el.classList.add('opacity-30', 'border-emerald-500', 'bg-emerald-50');
+        el.classList.add('opacity-30', 'border-emerald-500', 'bg-emerald-50');
+        matchSelected = null; matchCount++;
+        if (matchCount === 6) { clearInterval(matchInt); showToast('🏆 Hoàn thành ghép thẻ!'); }
+      } else {
+        const prev = matchSelected.el;
+        prev.classList.add('border-red-500', 'bg-red-50'); el.classList.add('border-red-500', 'bg-red-50');
+        setTimeout(() => { prev.classList.remove('border-rose-600', 'bg-rose-50', 'border-red-500', 'bg-red-50'); el.classList.remove('border-red-500', 'bg-red-50'); }, 400);
+        matchSelected = null;
+      }
+    }
+
+    function speakText(t, rate = 0.9) {
+      if (!t || !('speechSynthesis' in window)) return;
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(t);
+      u.lang = 'zh-CN';
+      u.rate = rate;
+      window.speechSynthesis.speak(u);
+    }
+
+    function switchTab(tab) {
+      document.querySelectorAll('.view-section').forEach(s => s.classList.add('hidden'));
+      document.getElementById('view-' + tab).classList.remove('hidden');
+      document.querySelectorAll('.tab-btn').forEach(b => {
+        b.classList.remove('border-rose-600', 'text-rose-600');
+        b.classList.add('border-transparent', 'text-slate-500');
+      });
+      document.getElementById('tab-' + tab).classList.add('border-rose-600', 'text-rose-600');
+      document.getElementById('tab-' + tab).classList.remove('border-transparent', 'text-slate-500');
+
+      if (tab === 'quiz') generateQuizQuestion();
+      if (tab === 'sentence') initSentenceTest();
+      if (tab === 'pronounce') initPronounceTest();
+      if (tab === 'match') initMatchGame();
+    }
+
+    function showToast(m) {
+      const t = document.getElementById('toast');
+      t.textContent = m;
+      t.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => t.classList.add('translate-y-20', 'opacity-0'), 3800);
+    }
+
+    document.addEventListener('keydown', e => {
+      const activeTag = document.activeElement.tagName;
+      if (document.getElementById('wordModal').classList.contains('hidden') && activeTag !== 'INPUT' && activeTag !== 'TEXTAREA') {
+        if (e.code === 'Space' && !document.getElementById('view-flashcard').classList.contains('hidden')) {
+          e.preventDefault(); flipCard();
+        }
+        if (e.code === 'ArrowRight' && !document.getElementById('view-flashcard').classList.contains('hidden')) nextCard();
+        if (e.code === 'ArrowLeft' && !document.getElementById('view-flashcard').classList.contains('hidden')) prevCard();
+      }
+    });
+
+    window.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>
